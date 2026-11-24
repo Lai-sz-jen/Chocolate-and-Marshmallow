@@ -1,0 +1,85 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>兌獎配對查詢</title>
+<style>
+:root{--bg:#f6f4ef;--card:#fff;--ink:#1f2937;--mute:#6b7280;--line:#e5e1d8;--acc:#2f5d50;--okbg:#dcfce7;--ok:#15803d}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--ink);font-family:system-ui,-apple-system,"Noto Sans TC","PingFang TC",sans-serif;display:flex;justify-content:center;padding:20px 14px 60px}
+main{width:100%;max-width:480px}
+h1{font-size:22px;margin:4px 0 2px}
+.sub{color:var(--mute);font-size:14px;margin-bottom:16px}
+.wrap{position:relative}
+input{width:100%;font-size:22px;padding:14px 44px 14px 14px;border:1.5px solid var(--line);border-radius:12px;background:#fff;color:var(--ink)}
+input:focus{outline:none;border-color:var(--acc)}
+#clr{position:absolute;right:6px;top:50%;transform:translateY(-50%);border:0;background:none;font-size:22px;color:var(--mute);padding:8px 10px;cursor:pointer;display:none}
+#out{margin-top:14px;display:flex;flex-direction:column;gap:10px}
+.item{background:var(--okbg);color:var(--ok);border-radius:12px;padding:14px 16px;display:flex;align-items:center;justify-content:space-between;gap:10px}
+.item .q{font-size:15px;color:var(--mute)}
+.item .p{font-size:26px;font-weight:700;text-align:right}
+.none{background:#fee2e2;color:#b91c1c;border-radius:12px;padding:16px;text-align:center;font-size:18px;font-weight:600}
+.status{font-size:12px;color:var(--mute);margin-top:18px;text-align:center}
+</style>
+</head>
+<body>
+<main>
+<h1>兌獎配對查詢</h1>
+<div class="sub">輸入參加者手上的一張題目，立刻顯示正確配對。</div>
+<div class="wrap">
+  <input id="q" autocomplete="off" autocapitalize="off" placeholder="例如：筷子" autofocus>
+  <button id="clr" aria-label="清除">✕</button>
+</div>
+<div id="out"></div>
+<div class="status" id="status">載入題目中…</div>
+</main>
+<script>
+// 若 pairs.csv 讀不到，會用這份備援資料（預覽用，正式使用時以 pairs.csv 為準）
+const EMBEDDED = null;
+
+const norm = s => (s||"").normalize("NFKC").toLowerCase().replace(/\s+/g,"");
+const esc = s => s.replace(/[&<>"]/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]));
+let entries = []; // {item, partner, key}
+
+function parseCSV(text){
+  const lines = text.replace(/^﻿/,"").split(/\r?\n/).filter(l=>l.trim());
+  lines.shift();
+  return lines.map(l=>l.split(",").map(s=>s.trim())).filter(c=>c[0]&&c[1]);
+}
+function build(rows){
+  entries=[];
+  for(const [a,b] of rows){
+    entries.push({item:a,partner:b,key:norm(a)});
+    entries.push({item:b,partner:a,key:norm(b)});
+  }
+  document.getElementById("status").textContent=`已載入 ${rows.length} 組配對`;
+}
+async function load(){
+  try{
+    const r=await fetch("pairs.csv?t="+Date.now(),{cache:"no-store"});
+    if(!r.ok) throw 0;
+    build(parseCSV(await r.text()));
+  }catch(e){
+    if(EMBEDDED) build(parseCSV(EMBEDDED));
+    else document.getElementById("status").textContent="讀取 pairs.csv 失敗";
+  }
+  render();
+}
+function render(){
+  const q=norm(document.getElementById("q").value);
+  const out=document.getElementById("out");
+  document.getElementById("clr").style.display=q?"block":"none";
+  if(!q){out.innerHTML="";return;}
+  let hits=entries.filter(e=>e.key===q);
+  if(!hits.length) hits=entries.filter(e=>e.key.includes(q)||q.includes(e.key)).slice(0,8);
+  if(!hits.length){out.innerHTML='<div class="none">找不到這個詞</div>';return;}
+  out.innerHTML=hits.map(e=>`<div class="item"><span class="q">${esc(e.item)} ↔</span><span class="p">${esc(e.partner)}</span></div>`).join("");
+}
+const q=document.getElementById("q");
+q.addEventListener("input",render);
+document.getElementById("clr").onclick=()=>{q.value="";render();q.focus();};
+load();
+</script>
+</body>
+</html>
